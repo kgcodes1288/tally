@@ -88,12 +88,26 @@ async def sweeper():
         await asyncio.sleep(600)
 
 
+PRIMARY_LOCK = 774201   # Postgres advisory lock id: only one API instance may recover and sweep
+
+
 @asynccontextmanager
 async def lifespan(app):
-    await recover()
-    task = asyncio.create_task(sweeper())
+    # Recovery assumes "nothing is really running", which is only true for the single primary instance.
+    # A second instance (a dev copy, a rolling restart) must never kill the primary's live tasks,
+    # so it serves requests but skips recovery and housekeeping. The lock is held for the life of the process.
+    lock = o.admin_db()
+    primary = lock.execute("SELECT pg_try_advisory_lock(%s)", (PRIMARY_LOCK,)).fetchone()[0]
+    task = None
+    if primary:
+        await recover()
+        task = asyncio.create_task(sweeper())
+    else:
+        print("secondary API instance: skipping restart recovery and housekeeping", flush=True)
     yield
-    task.cancel()
+    if task:
+        task.cancel()
+    lock.close()
 
 
 app = FastAPI(title="Tally", lifespan=lifespan, dependencies=[Depends(check_csrf)])
@@ -229,6 +243,10 @@ def stop(task_id: str, user: User = Depends(current_user)):
 @app.get("/api/tasks/{task_id}/files/{path:path}")
 def file(task_id: str, path: str, user: User = Depends(current_user)):
     _task(task_id, user)
+    return _serve_file(task_id, path)
+
+
+def _serve_file(task_id: str, path: str):
     base = (o.RUNS / task_id / "workspace/out").resolve()
     target = (base / path).resolve()
     if base not in target.parents or not target.is_file():      # no ../ escapes
@@ -241,6 +259,46 @@ def file(task_id: str, path: str, user: User = Depends(current_user)):
     inline = target.suffix.lower() in (".html", ".htm", ".pdf", ".csv", ".md", ".json", ".txt", ".svg", ".png")
     return FileResponse(target, media_type=mimetypes.guess_type(target.name)[0] or "application/octet-stream",
                         filename=target.name, content_disposition_type="inline" if inline else "attachment", headers=headers)
+
+
+# ---------------------------------------------------------------- public replays (no login; read-only; showcase tasks only)
+# Cloudflare Access bypasses /demo and /api/public/ for these, so nothing here may depend on who is calling,
+# and nothing here can start, steer or stop a task.
+
+def _showcase(task_id: str):
+    r = rows("""SELECT t.id::text, t.showcase_title AS title, t.showcase_blurb AS blurb, t.workspace_id, w.name AS workspace_name,
+                       p.title AS persona_title, t.model, t.prompt, t.status, t.spent_usd, t.result, t.started_at, t.finished_at
+                FROM tally.tasks t JOIN tally.workspaces w ON w.id = t.workspace_id JOIN tally.personas p ON p.pg_role = t.persona
+                WHERE t.id::text = %s AND t.showcase_title IS NOT NULL AND t.status IN ('succeeded', 'stopped')""", task_id)
+    if not r:
+        raise HTTPException(404, "not found")
+    return r[0]
+
+
+@app.get("/api/public/replays")
+def public_replays():
+    return rows("""SELECT t.id::text, t.showcase_title AS title, t.showcase_blurb AS blurb, w.name AS workspace_name, p.title AS persona_title,
+                          t.model, t.spent_usd, extract(epoch FROM t.finished_at - t.started_at)::int AS seconds
+                   FROM tally.tasks t JOIN tally.workspaces w ON w.id = t.workspace_id JOIN tally.personas p ON p.pg_role = t.persona
+                   WHERE t.showcase_title IS NOT NULL AND t.status IN ('succeeded', 'stopped')
+                   ORDER BY t.showcase_order NULLS LAST, t.finished_at DESC""")
+
+
+@app.get("/api/public/replays/{task_id}")
+def public_replay(task_id: str):
+    t = _showcase(task_id)
+    out = o.RUNS / task_id / "workspace/out"
+    t["files"] = [{"path": str(f.relative_to(out)), "bytes": f.stat().st_size} for f in sorted(out.rglob("*")) if f.is_file()] if out.exists() else []
+    t["events"] = rows("SELECT id, kind, data, ts FROM tally.task_events WHERE task_id::text = %s AND kind <> 'log' ORDER BY id", task_id)
+    for e in t["events"]:
+        e["data"] = {**e["data"], "ts": e.pop("ts").isoformat()}
+    return t
+
+
+@app.get("/api/public/replays/{task_id}/files/{path:path}")
+def public_file(task_id: str, path: str):
+    _showcase(task_id)
+    return _serve_file(task_id, path)
 
 
 @app.get("/api/usage")

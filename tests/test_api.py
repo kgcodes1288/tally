@@ -69,3 +69,43 @@ def test_file_paths_cannot_escape(client):
     t = tally.rows("SELECT id::text FROM tally.tasks WHERE status='succeeded' LIMIT 1")[0]["id"]
     for path in ("../task/prompt.txt", "..%2F..%2F.env", "%2Fetc%2Fpasswd"):
         assert client.get(f"/api/tasks/{t}/files/{path}").status_code == 404
+
+
+def test_public_replays_expose_only_showcase_tasks(client):
+    hidden = tally.rows("SELECT id::text FROM tally.tasks WHERE showcase_title IS NULL AND status='succeeded' LIMIT 1")[0]["id"]
+    via_cf = {"cf-ray": "x", "cf-connecting-ip": "203.0.113.9"}          # anonymous visitor through Cloudflare
+    assert client.get("/api/public/replays", headers=via_cf).status_code == 200
+    assert client.get(f"/api/public/replays/{hidden}", headers=via_cf).status_code == 404
+    assert client.get(f"/api/public/replays/{hidden}/files/x.csv", headers=via_cf).status_code == 404
+    # the signed-in API stays closed to the same anonymous visitor
+    assert client.get("/api/tasks", headers=via_cf).status_code in (401, 503)
+
+
+def test_public_replay_payload_has_no_secrets(client):
+    t = tally.rows("SELECT id::text FROM tally.tasks WHERE status='succeeded' ORDER BY created_at DESC LIMIT 1")[0]["id"]
+    tally.rows("UPDATE tally.tasks SET showcase_title='test' WHERE id::text=%s RETURNING id", t)
+    try:
+        body = client.get(f"/api/public/replays/{t}").text
+        for secret in ("created_by", "db_login", "proxy_token", "postgresql://", "sk-ant", "TALLY_DB_DSN"):
+            assert secret not in body
+    finally:
+        tally.rows("UPDATE tally.tasks SET showcase_title=NULL WHERE id::text=%s RETURNING id", t)
+
+
+def test_second_instance_does_not_recover_or_sweep():
+    """Regression: a second API instance once killed a live task during an eval run."""
+    import asyncio, orchestrator as o
+    held = o.admin_db()
+    assert held.execute("SELECT pg_try_advisory_lock(%s)", (tally.PRIMARY_LOCK,)).fetchone()[0] or True
+    called = []
+    orig = tally.recover
+    tally.recover = lambda: called.append(1) or asyncio.sleep(0)
+    try:
+        async def run():
+            async with tally.lifespan(tally.app):
+                pass
+        asyncio.run(run())
+    finally:
+        tally.recover = orig
+        held.close()
+    assert called == [], "a secondary instance ran restart recovery"

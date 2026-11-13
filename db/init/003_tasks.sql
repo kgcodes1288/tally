@@ -63,3 +63,8 @@ GRANT USAGE ON SEQUENCE tally.model_usage_id_seq, tally.task_events_id_seq TO ta
 -- Who ran each task (email from the Cloudflare Access login, or owner@local for local access).
 ALTER TABLE tally.tasks ADD COLUMN IF NOT EXISTS created_by text NOT NULL DEFAULT 'owner@local';
 CREATE INDEX IF NOT EXISTS tasks_created_by ON tally.tasks (created_by, created_at DESC);
+
+-- Public replay gallery: only tasks the owner gives a showcase title appear at /demo (read-only, no login).
+ALTER TABLE tally.tasks ADD COLUMN IF NOT EXISTS showcase_title text;
+ALTER TABLE tally.tasks ADD COLUMN IF NOT EXISTS showcase_blurb text;
+ALTER TABLE tally.tasks ADD COLUMN IF NOT EXISTS showcase_order int;

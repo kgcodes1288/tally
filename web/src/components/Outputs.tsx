@@ -29,8 +29,7 @@ function parseCsv(text: string, limit = 200) {
   return rows
 }
 
-function Preview({ taskId, file, onClose }: { taskId: string; file: OutputFile; onClose: () => void }) {
-  const url = api.fileUrl(taskId, file.path)
+function Preview({ url, file, onClose }: { url: string; file: OutputFile; onClose: () => void }) {
   const e = ext(file.path)
   const [text, setText] = useState<string | null>(null)
   useEffect(() => {
@@ -69,7 +68,8 @@ function Preview({ taskId, file, onClose }: { taskId: string; file: OutputFile; 
   )
 }
 
-export function Outputs({ taskId, files }: { taskId: string; files: OutputFile[] }) {
+export function Outputs({ taskId, files, urlFor }: { taskId: string; files: OutputFile[]; urlFor?: (path: string) => string }) {
+  const link = urlFor ?? ((path: string) => api.fileUrl(taskId, path))
   const [open, setOpen] = useState<OutputFile | null>(null)
   const order = ['html', 'pdf', 'md', 'csv', 'json']
   const sorted = [...files].sort((a, b) => (order.indexOf(ext(a.path)) + 9) % 9 - (order.indexOf(ext(b.path)) + 9) % 9)
@@ -90,7 +90,7 @@ export function Outputs({ taskId, files }: { taskId: string; files: OutputFile[]
           )
         })}
       </div>
-      {open && <Preview taskId={taskId} file={open} onClose={() => setOpen(null)} />}
+      {open && <Preview url={link(open.path)} file={open} onClose={() => setOpen(null)} />}
     </>
   )
 }
