@@ -101,6 +101,7 @@ export function TaskView({ taskId, onChanged }: { taskId: string; onChanged: () 
         </div>
 
         <aside className="min-h-0 space-y-4 overflow-y-auto border-l border-line bg-canvas/60 px-5 py-5">
+          {task.files_expired && <Card className="p-4 text-[13px] text-ink-3">Output files are kept for 30 days and have been removed. The activity timeline is kept.</Card>}
           {task.files.length > 0 && (
             <div>
               <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-ink-3">Outputs</div>

@@ -1,0 +1,17 @@
+[Unit]
+Description=Tally platform API and web app (localhost only)
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+User=karthick1288
+WorkingDirectory=/home/karthick1288/tally/api
+# Audience tag of the Cloudflare Access application for tally.karthickg.dev (not a secret)
+Environment=TALLY_CF_AUD=
+Environment=TALLY_OWNERS=karthickmit25@gmail.com
+ExecStart=/home/karthick1288/tally/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8300 --no-access-log
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

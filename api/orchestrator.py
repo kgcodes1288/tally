@@ -35,15 +35,16 @@ def event(db, task_id, kind, data):
     db.execute("INSERT INTO tally.task_events (task_id, kind, data) VALUES (%s, %s, %s)", (task_id, kind, Json(data)))
 
 
-def create_task(workspace: str, persona: str, prompt: str, model: str = "claude-sonnet-5-5", budget_usd: float = 0.50) -> str:
+def create_task(workspace: str, persona: str, prompt: str, model: str = "claude-sonnet-5-5", budget_usd: float = 0.50,
+                created_by: str = "owner@local") -> str:
     if model not in MODELS:
         raise ValueError(f"model must be one of {sorted(MODELS)}")
     with admin_db() as db:
         ok = db.execute("SELECT 1 FROM tally.personas WHERE pg_role=%s AND workspace_id=%s", (persona, workspace)).fetchone()
         if not ok:
             raise ValueError(f"{persona} is not a persona of {workspace}")
-        tid = db.execute("INSERT INTO tally.tasks (workspace_id, persona, model, prompt, budget_usd) VALUES (%s,%s,%s,%s,%s) RETURNING id",
-                         (workspace, persona, model, prompt, budget_usd)).fetchone()[0]
+        tid = db.execute("INSERT INTO tally.tasks (workspace_id, persona, model, prompt, budget_usd, created_by) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
+                         (workspace, persona, model, prompt, budget_usd, created_by)).fetchone()[0]
         event(db, tid, "status", {"status": "queued"})
     return str(tid)
 

@@ -59,3 +59,7 @@ GRANT SELECT, UPDATE (spent_usd, status) ON tally.tasks TO tally_proxy;
 GRANT INSERT ON tally.model_usage, tally.task_events TO tally_proxy;
 GRANT SELECT (cost_usd, ts) ON tally.model_usage TO tally_proxy;   -- for the daily cap
 GRANT USAGE ON SEQUENCE tally.model_usage_id_seq, tally.task_events_id_seq TO tally_proxy;
+
+-- Who ran each task (email from the Cloudflare Access login, or owner@local for local access).
+ALTER TABLE tally.tasks ADD COLUMN IF NOT EXISTS created_by text NOT NULL DEFAULT 'owner@local';
+CREATE INDEX IF NOT EXISTS tasks_created_by ON tally.tasks (created_by, created_at DESC);

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Gauge } from 'lucide-react'
-import type { TaskSummary, Workspace } from './lib/api'
+import type { Me, TaskSummary, Workspace } from './lib/api'
 import { api, money, usePolling } from './lib/api'
 import { Sidebar } from './components/Sidebar'
 import { Composer } from './components/Composer'
@@ -17,7 +17,8 @@ export default function App() {
   const tasks = usePolling<TaskSummary[]>(api.tasks, 4000, [tick]) ?? []
   const usage = usePolling(api.usage, 10000, [tick])
 
-  useEffect(() => { api.workspaces().then(setWorkspaces) }, [])
+  const [me, setMe] = useState<Me | null>(null)
+  useEffect(() => { api.workspaces().then(setWorkspaces); api.me().then(setMe) }, [])
   useEffect(() => { const on = () => setTaskId(route()); window.addEventListener('hashchange', on); return () => window.removeEventListener('hashchange', on) }, [])
 
   const ws = workspaces.find(w => w.id === wsId) ?? workspaces[0]
@@ -45,7 +46,7 @@ export default function App() {
         )}
         {taskId
           ? <TaskView key={taskId} taskId={taskId} onChanged={refresh} />
-          : <Composer key={ws.id + persona.id} ws={ws} persona={persona} onCreated={id => { refresh(); open(id) }} />}
+          : <Composer key={ws.id + persona.id} ws={ws} persona={persona} maxBudget={me?.limits.max_budget ?? 0.5} onCreated={id => { refresh(); open(id) }} />}
       </main>
     </div>
   )

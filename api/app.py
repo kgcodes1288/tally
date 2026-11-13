@@ -17,12 +17,13 @@ import asyncio, json, mimetypes
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import orchestrator as o
+from auth import User, check_csrf, current_user
 
 MAX_CONCURRENT = 2
 slots = asyncio.Semaphore(MAX_CONCURRENT)
@@ -48,13 +49,54 @@ async def recover():
             o.event(db, t["id"], "status", {"status": "failed", "reason": "platform restart"})
 
 
+RETENTION_DAYS = int(o.os.environ.get("TALLY_RETENTION_DAYS", "30"))
+
+
+async def sweep_once():
+    """Remove anything a task should not leave behind, and output files past the retention period."""
+    active = {t["id"] for t in rows("SELECT id::text FROM tally.tasks WHERE status IN ('queued','running')")}
+    ps = await asyncio.to_thread(o.subprocess.run, ["docker", "ps", "-a", "--filter", "label=tally.task",
+                                 "--format", '{{.Names}} {{.Label "tally.task"}}'], capture_output=True, text=True)
+    removed = 0
+    for line in ps.stdout.splitlines():
+        name, task = (line.split() + [""])[:2]
+        if task not in active:
+            await asyncio.to_thread(o.subprocess.run, ["docker", "rm", "-f", name], capture_output=True); removed += 1
+    with o.admin_db() as db:
+        # only the orchestrator's own naming pattern (t_ + 12 hex), never anything else
+        stale = [r for (r,) in db.execute(r"""SELECT rolname FROM pg_roles WHERE rolname ~ '^t_[0-9a-f]{12}$'
+                   AND rolname NOT IN (SELECT db_login FROM tally.tasks WHERE status IN ('queued','running') AND db_login IS NOT NULL)""")]
+        for r in stale:
+            db.execute("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = %s", (r,))
+            db.execute(o.sql.SQL("DROP ROLE IF EXISTS {}").format(o.sql.Identifier(r)))
+    expired = 0
+    for t in rows("SELECT id::text FROM tally.tasks WHERE finished_at < now() - make_interval(days => %s)", RETENTION_DAYS):
+        d = o.RUNS / t["id"]
+        if d.exists():
+            await asyncio.to_thread(o.shutil.rmtree, d, True); expired += 1
+    if removed or stale or expired:
+        print(f"sweep: removed {removed} containers, {len(stale)} logins, {expired} expired run folders", flush=True)
+    return {"containers": removed, "logins": len(stale), "run_folders": expired}
+
+
+async def sweeper():
+    while True:
+        try:
+            await sweep_once()
+        except Exception as e:                       # never let housekeeping take the API down
+            print(f"sweep failed: {e}", flush=True)
+        await asyncio.sleep(600)
+
+
 @asynccontextmanager
 async def lifespan(app):
     await recover()
+    task = asyncio.create_task(sweeper())
     yield
+    task.cancel()
 
 
-app = FastAPI(title="Tally", lifespan=lifespan)
+app = FastAPI(title="Tally", lifespan=lifespan, dependencies=[Depends(check_csrf)])
 
 
 class NewTask(BaseModel):
@@ -69,8 +111,13 @@ class Steer(BaseModel):
     body: str = Field(min_length=1, max_length=4000)
 
 
+@app.get("/api/me")
+def me(user: User = Depends(current_user)):
+    return {"email": user.email, "role": user.role, "limits": user.limits}
+
+
 @app.get("/api/workspaces")
-def workspaces():
+def workspaces(user: User = Depends(current_user)):
     ws = rows("SELECT id, name, description, scope_label FROM tally.workspaces ORDER BY name")
     personas = rows("""SELECT p.pg_role AS id, p.workspace_id, p.title, p.description, p.all_scopes,
                               array_remove(array_agg(s.scope_value ORDER BY s.scope_value), NULL) AS scopes
@@ -89,9 +136,22 @@ async def _run(task_id):
 
 
 @app.post("/api/tasks", status_code=201)
-async def create(t: NewTask):
+async def create(t: NewTask, user: User = Depends(current_user)):
+    lim = user.limits
+    if t.budget_usd > lim["max_budget"]:
+        raise HTTPException(400, f"The budget for one task can be at most ${lim['max_budget']:.2f}")
+    mine = rows("""SELECT count(*) FILTER (WHERE status IN ('queued','running')) AS active,
+                          count(*) FILTER (WHERE created_at > now() - interval '1 day') AS today,
+                          coalesce(sum(spent_usd) FILTER (WHERE created_at > now() - interval '1 day'), 0) AS spent
+                   FROM tally.tasks WHERE created_by = %s""", user.email)[0]
+    if mine["active"] >= lim["concurrent"]:
+        raise HTTPException(429, "You already have a task running. Wait for it to finish or stop it.")
+    if mine["today"] >= lim["tasks_per_day"]:
+        raise HTTPException(429, f"Daily limit of {lim['tasks_per_day']} tasks reached. Try again tomorrow.")
+    if float(mine["spent"]) >= lim["usd_per_day"]:
+        raise HTTPException(429, f"Daily spending limit of ${lim['usd_per_day']:.2f} reached. Try again tomorrow.")
     try:
-        tid = o.create_task(t.workspace, t.persona, t.prompt, t.model, t.budget_usd)
+        tid = o.create_task(t.workspace, t.persona, t.prompt, t.model, t.budget_usd, created_by=user.email)
     except ValueError as e:
         raise HTTPException(400, str(e))
     running[tid] = asyncio.create_task(_run(tid))
@@ -99,32 +159,34 @@ async def create(t: NewTask):
 
 
 @app.get("/api/tasks")
-def list_tasks(limit: int = 30):
+def list_tasks(limit: int = 30, user: User = Depends(current_user)):
     return rows("""SELECT id::text, workspace_id, persona, model, left(prompt, 200) AS prompt, status, spent_usd, budget_usd,
-                          created_at, finished_at FROM tally.tasks ORDER BY created_at DESC LIMIT %s""", min(limit, 200))
+                          created_at, finished_at FROM tally.tasks WHERE %s OR created_by = %s
+                   ORDER BY created_at DESC LIMIT %s""", user.role == "owner", user.email, min(limit, 200))
 
 
-def _task(task_id):
-    r = rows("""SELECT t.id::text, t.workspace_id, w.name AS workspace_name, t.persona, p.title AS persona_title, t.model, t.prompt,
+def _task(task_id, user: User):
+    r = rows("""SELECT t.id::text, t.created_by, t.workspace_id, w.name AS workspace_name, t.persona, p.title AS persona_title, t.model, t.prompt,
                        t.status, t.spent_usd, t.budget_usd, t.result, t.error, t.created_at, t.started_at, t.finished_at
                 FROM tally.tasks t JOIN tally.workspaces w ON w.id=t.workspace_id JOIN tally.personas p ON p.pg_role=t.persona
                 WHERE t.id::text = %s""", task_id)
-    if not r:
+    if not r or not user.can_see(r[0]["created_by"]):        # someone else's task looks exactly like a missing one
         raise HTTPException(404, "no such task")
     return r[0]
 
 
 @app.get("/api/tasks/{task_id}")
-def get_task(task_id: str):
-    t = _task(task_id)
+def get_task(task_id: str, user: User = Depends(current_user)):
+    t = _task(task_id, user)
     out = o.RUNS / task_id / "workspace/out"
     t["files"] = [{"path": str(f.relative_to(out)), "bytes": f.stat().st_size} for f in sorted(out.rglob("*")) if f.is_file()] if out.exists() else []
+    t["files_expired"] = t["finished_at"] is not None and not (o.RUNS / task_id).exists()
     return t
 
 
 @app.get("/api/tasks/{task_id}/events")
-async def events(task_id: str, request: Request):
-    _task(task_id)
+async def events(task_id: str, request: Request, user: User = Depends(current_user)):
+    _task(task_id, user)
     last = int(request.headers.get("last-event-id") or 0)
 
     async def stream():
@@ -150,23 +212,23 @@ async def events(task_id: str, request: Request):
 
 
 @app.post("/api/tasks/{task_id}/messages", status_code=202)
-def steer(task_id: str, m: Steer):
-    if _task(task_id)["status"] != "running":
+def steer(task_id: str, m: Steer, user: User = Depends(current_user)):
+    if _task(task_id, user)["status"] != "running":
         raise HTTPException(409, "task is not running")
     return {"message_id": o.steer(task_id, m.body)}
 
 
 @app.post("/api/tasks/{task_id}/stop", status_code=202)
-def stop(task_id: str):
-    if _task(task_id)["status"] != "running":
+def stop(task_id: str, user: User = Depends(current_user)):
+    if _task(task_id, user)["status"] != "running":
         raise HTTPException(409, "task is not running")
     o.stop(task_id)
     return {"stopping": True}
 
 
 @app.get("/api/tasks/{task_id}/files/{path:path}")
-def file(task_id: str, path: str):
-    _task(task_id)
+def file(task_id: str, path: str, user: User = Depends(current_user)):
+    _task(task_id, user)
     base = (o.RUNS / task_id / "workspace/out").resolve()
     target = (base / path).resolve()
     if base not in target.parents or not target.is_file():      # no ../ escapes
@@ -182,7 +244,7 @@ def file(task_id: str, path: str):
 
 
 @app.get("/api/usage")
-def usage():
+def usage(user: User = Depends(current_user)):
     r = rows("""SELECT coalesce(sum(cost_usd),0) AS today_usd, count(DISTINCT task_id) AS tasks_today
                 FROM tally.model_usage WHERE ts >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'""")[0]
     return {**r, "daily_cap_usd": 3.00, "running": len(running), "max_concurrent": MAX_CONCURRENT}
@@ -207,6 +269,8 @@ if WEB.exists():
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str):
+        if path.startswith("api/"):                       # unknown API paths are errors, not the app shell
+            raise HTTPException(404, "not found")
         f = (WEB / path).resolve()
         if path and WEB in f.parents and f.is_file():
             return FileResponse(f)

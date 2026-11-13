@@ -56,6 +56,19 @@ Each workspace lives in its own Postgres schema. Tables carry a **scope column**
 
 Workspaces for public-company financials (SEC EDGAR) and immigration statistics will be added when their data is in place.
 
+## Access control
+
+Tally runs behind a Cloudflare Tunnel with Cloudflare Access in front of it. Because the tunnel connects from the same machine, every internet request also arrives from 127.0.0.1, so the source address proves nothing. The API therefore applies one rule (`api/auth.py`):
+
+- A request that came through Cloudflare (Cloudflare always adds `CF-Ray` and `CF-Connecting-IP` at its edge) must carry a valid Access JWT for Tally's Access application, verified against Cloudflare's published keys. If Access is not configured, such requests are refused: the API fails closed.
+- A request with no Cloudflare headers can only come from the machine itself (the API binds to localhost) and is treated as the owner.
+
+Owners see every task. Invited users see only their own (someone else's task returns 404, exactly like a missing one) and have tighter limits: one task at a time, 10 tasks and $1 per day, $0.50 per task. Every state-changing request must carry a custom `X-Tally-Request` header and a same-site `Origin`, which blocks cross-site request forgery. Agent-written HTML is served with `Content-Security-Policy: sandbox` and shown in a sandboxed iframe.
+
+## Housekeeping
+
+A sweeper inside the API runs every 10 minutes: it removes task containers that should not exist, drops task database logins whose task has finished (matching only the orchestrator's naming pattern), and deletes task output files after 30 days. Event history is kept, so old tasks still replay. On start-up, tasks interrupted by a restart are cleaned up and marked failed.
+
 ## Build phases
 
 1. Data, roles and knowledge base

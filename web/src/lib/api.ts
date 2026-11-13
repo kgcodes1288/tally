@@ -41,6 +41,7 @@ export type TaskDetail = TaskSummary & {
   error: string | null
   started_at: string | null
   files: OutputFile[]
+  files_expired?: boolean
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,7 +50,8 @@ export type TaskEvent = { id: number; kind: string; data: Record<string, any> & 
 export type Usage = { today_usd: number; tasks_today: number; daily_cap_usd: number; running: number; max_concurrent: number }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(path, { headers: { 'content-type': 'application/json' }, ...init })
+  // x-tally-request: a custom header other websites cannot add, so they cannot trigger actions (CSRF protection)
+  const r = await fetch(path, { headers: { 'content-type': 'application/json', 'x-tally-request': '1' }, ...init })
   if (!r.ok) {
     const body = await r.json().catch(() => ({}))
     throw new Error(body.detail ?? `${r.status} ${r.statusText}`)
@@ -57,7 +59,10 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   return r.json()
 }
 
+export type Me = { email: string; role: 'owner' | 'invited'; limits: { concurrent: number; tasks_per_day: number; usd_per_day: number; max_budget: number } }
+
 export const api = {
+  me: () => req<Me>('/api/me'),
   workspaces: () => req<Workspace[]>('/api/workspaces'),
   tasks: () => req<TaskSummary[]>('/api/tasks?limit=40'),
   task: (id: string) => req<TaskDetail>(`/api/tasks/${id}`),

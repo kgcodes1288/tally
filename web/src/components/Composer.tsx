@@ -23,12 +23,12 @@ const SUGGESTIONS: Record<string, string[]> = {
   ],
 }
 
-type Props = { ws: Workspace; persona: Persona; onCreated: (id: string) => void }
+type Props = { ws: Workspace; persona: Persona; maxBudget: number; onCreated: (id: string) => void }
 
-export function Composer({ ws, persona, onCreated }: Props) {
+export function Composer({ ws, persona, maxBudget, onCreated }: Props) {
   const [prompt, setPrompt] = useState('')
   const [model, setModel] = useState<string>(MODELS[0].id)
-  const [budget, setBudget] = useState(0.5)
+  const [budget, setBudget] = useState(Math.min(0.5, maxBudget))
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -73,7 +73,7 @@ export function Composer({ ws, persona, onCreated }: Props) {
           </div>
           <label className="flex items-center gap-2 text-[13px] text-ink-2">
             Budget
-            <input type="range" min={0.1} max={1.5} step={0.05} value={budget} onChange={e => setBudget(Number(e.target.value))}
+            <input type="range" min={0.1} max={maxBudget} step={0.05} value={budget} onChange={e => setBudget(Number(e.target.value))}
               className="w-28 accent-[var(--color-accent)]" aria-label="Task budget in dollars" />
             <span className="w-11 font-semibold tabular-nums text-ink">${budget.toFixed(2)}</span>
           </label>
