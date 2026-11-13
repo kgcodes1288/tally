@@ -4,7 +4,7 @@
 
 Tally is a self-hosted platform for agentic data work: reconciliations, investigations, data-quality checks and reports, delivered as CSV files, PDF reports or interactive HTML dashboards. It is a personal, open-source project built on public data.
 
-> Status: Phases 1 to 3 are complete: data, roles and knowledge base; sandboxed agent runs with a model proxy, steering, stop and a streaming API; and skills that produce reconciliations, data-quality reports, interactive dashboards and PDF reports. Next: the web app. See [the architecture](docs/ARCHITECTURE.md).
+> Status: Phases 1 to 4 are complete: data, roles and knowledge base; sandboxed agent runs with a model proxy, steering and stop; skills for reconciliations, data-quality reports, dashboards and PDF reports; and a web app with a live activity timeline. Next: hardening and the public demo. See [the architecture](docs/ARCHITECTURE.md).
 
 ## What makes it different
 
@@ -23,6 +23,12 @@ Tally is a self-hosted platform for agentic data work: reconciliations, investig
 | Online Retail | Olist Brazilian e-commerce, about 100K orders in nine tables | Regional managers by state, plus head of finance |
 | City Operations | NYC 311 service requests, Q1 2025 (885K requests) | Borough operations managers, plus a citywide director |
 
+## The web app
+
+Pick a workspace and the role you are acting as, then ask in plain English. Every step the agent takes appears live: queries with their results, knowledge-base searches with citations, skills it uses, files it writes. Type a note while it works and it picks it up at its next step; press Stop to interrupt. Dashboards, PDFs and CSVs open inside the app. Agent-made pages are untrusted, so they run in a sandboxed frame (and with a `Content-Security-Policy: sandbox` header if opened directly) with no access to the app or its API.
+
+Built with React, Vite, TypeScript and Tailwind; served by the same FastAPI service as the API.
+
 ## Run it locally
 
 ```bash
@@ -35,6 +41,9 @@ python3 data/fetch_usaspending.py 2025 72:nasa 80:education 78:energy 61:epa 46:
 .venv/bin/python data/loaders/load_retail.py
 .venv/bin/python data/loaders/load_city.py
 .venv/bin/python kb/ingest.py
+docker build -f sandbox/Dockerfile -t tally-sandbox:dev .
+(cd web && npm install && npm run build)
+cd api && ../.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8300   # then open http://127.0.0.1:8300
 cd tests && ../.venv/bin/python -m pytest -q
 ```
 

@@ -19,6 +19,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import orchestrator as o
@@ -170,7 +171,14 @@ def file(task_id: str, path: str):
     target = (base / path).resolve()
     if base not in target.parents or not target.is_file():      # no ../ escapes
         raise HTTPException(404, "no such file")
-    return FileResponse(target, media_type=mimetypes.guess_type(target.name)[0] or "application/octet-stream", filename=target.name)
+    headers = {"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"}
+    if target.suffix.lower() in (".html", ".htm", ".svg"):
+        # Agent-written pages are untrusted: run them in an opaque origin even when opened directly in a tab,
+        # so their scripts can never reach the app, its cookies or this API.
+        headers["Content-Security-Policy"] = "sandbox allow-scripts allow-popups; default-src 'self' 'unsafe-inline' data: blob:"
+    inline = target.suffix.lower() in (".html", ".htm", ".pdf", ".csv", ".md", ".json", ".txt", ".svg", ".png")
+    return FileResponse(target, media_type=mimetypes.guess_type(target.name)[0] or "application/octet-stream",
+                        filename=target.name, content_disposition_type="inline" if inline else "attachment", headers=headers)
 
 
 @app.get("/api/usage")
@@ -178,3 +186,28 @@ def usage():
     r = rows("""SELECT coalesce(sum(cost_usd),0) AS today_usd, count(DISTINCT task_id) AS tasks_today
                 FROM tally.model_usage WHERE ts >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'""")[0]
     return {**r, "daily_cap_usd": 3.00, "running": len(running), "max_concurrent": MAX_CONCURRENT}
+
+
+# ---------------------------------------------------------------- web app (built by `npm run build` in web/)
+WEB = Path(__file__).resolve().parents[1] / "web" / "dist"
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    resp = await call_next(request)
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("Referrer-Policy", "same-origin")
+    if not request.url.path.startswith("/api/tasks/") or "/files/" not in request.url.path:
+        resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    return resp
+
+
+if WEB.exists():
+    app.mount("/assets", StaticFiles(directory=WEB / "assets"), name="assets")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def spa(path: str):
+        f = (WEB / path).resolve()
+        if path and WEB in f.parents and f.is_file():
+            return FileResponse(f)
+        return FileResponse(WEB / "index.html", headers={"Cache-Control": "no-cache"})

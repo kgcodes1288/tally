@@ -187,7 +187,11 @@ def build(spec, out):
                      f"<div class='note'>{html.escape(k.get('note', ''))}</div>{pill}</div>")
     kpis = f"<div class='kpis'>{''.join(parts)}</div>" if parts else ""
     cards = []
-    for c in spec.get("charts", []):
+    charts = spec.get("charts", [])
+    half = [c for c in charts if not c.get("wide")]
+    if len(half) % 2 == 1:                                   # a chart without a partner takes the full width
+        half[-1]["wide"] = True
+    for c in charts:
         fig, cols, rows = figure(c); figs += 1
         div = fig.to_html(full_html=False, include_plotlyjs=False, config={"displaylogo": False, "responsive": True,
                           "modeBarButtonsToRemove": ["lasso2d", "select2d"]}, div_id=f"chart{figs}")
