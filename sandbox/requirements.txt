@@ -1,0 +1,10 @@
+claude-agent-sdk==0.2.181
+psycopg[binary]==3.2.*
+duckdb==1.*
+pandas==2.*
+pyarrow==18.*
+plotly==5.*
+weasyprint==63.*
+fastembed==0.4.*
+matplotlib==3.*
+openpyxl==3.*

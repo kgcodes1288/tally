@@ -10,6 +10,10 @@ services:
       POSTGRES_DB: tally
     ports:
       - "127.0.0.1:5433:5432"   # host-only; never exposed publicly
+    networks:
+      default: {}
+      sandbox:
+        ipv4_address: 172.30.0.10   # fixed: gVisor sandboxes cannot use Docker's embedded DNS
     volumes:
       - tally-pgdata:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro
@@ -18,5 +22,32 @@ services:
       test: ["CMD-SHELL", "pg_isready -U tally_admin -d tally"]
       interval: 5s
       retries: 20
+  proxy:
+    build: ./proxy
+    container_name: tally-proxy
+    restart: unless-stopped
+    environment:
+      TALLY_PROXY_DB_URL: ${TALLY_PROXY_DB_URL}
+      TALLY_DAILY_CAP_USD: "3.00"
+      ANTHROPIC_API_KEY_FILE: /run/secrets/anthropic_api_key
+    secrets:
+      - anthropic_api_key
+    networks:
+      default: {}                   # internet egress to api.anthropic.com
+      sandbox:
+        ipv4_address: 172.30.0.11   # what sandboxes use as ANTHROPIC_BASE_URL
+    depends_on:
+      db:
+        condition: service_healthy
+secrets:
+  anthropic_api_key:
+    file: ${HOME}/.config/anthropic/agent_api_key
+networks:
+  sandbox:
+    name: tally-sandbox
+    internal: true                  # no route to the internet
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
 volumes:
   tally-pgdata:

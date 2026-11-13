@@ -11,3 +11,4 @@ dist/
 kb/cache/
 kb/uploads/*
 !kb/uploads/.gitkeep
+runs/
