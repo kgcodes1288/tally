@@ -25,7 +25,7 @@ It is a personal, open-source, non-commercial project built entirely on public d
 | Data tool | MCP server (read-only SQL) | Connects with a short-lived, role-scoped database login; statement timeouts and row limits |
 | Database | PostgreSQL 17 with pgvector | Workspace data with row-level security, platform metadata, knowledge base, event log |
 | Knowledge base | pgvector, Postgres full-text search, fastembed (local embeddings), pypdf, trafilatura, python-docx | PDFs, web pages, wiki articles, playbooks and uploads, split by page or heading, every passage with a citation and an authority level; hybrid search with source diversity |
-| Skills | Agent Skills folders | Reusable procedures: reconcile sources, data-quality checks, HTML dashboard, PDF report |
+| Skills | Agent Skills folders (`skills/`), baked into the sandbox image and copied into each task's `.claude/skills` | `reconcile-sources` (DuckDB matcher: matched, left only, right only, amount difference), `data-quality-check` (profiler: duplicates, date order, negatives, outliers, missing), `html-dashboard` (JSON spec to an offline Plotly dashboard), `pdf-report` (JSON spec to a WeasyPrint PDF with matplotlib charts). Only these four are allowed; bundled skills are not |
 | Analytics in the sandbox | DuckDB, pandas, Plotly, WeasyPrint | Heavy computation and output generation |
 
 ## How a task flows

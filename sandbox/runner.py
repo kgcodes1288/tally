@@ -7,7 +7,7 @@ Steering: the platform drops messages into /task/inbox/*.json while the task run
 up and attaches them to the next tool result, so the agent reads them at its next step without being stopped.
 Stop: the platform sends SIGUSR1, which becomes a clean SDK interrupt.
 """
-import asyncio, json, os, signal, sys, time
+import asyncio, json, os, shutil, signal, sys, time
 from pathlib import Path
 
 from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKClient, HookMatcher, ResultMessage,
@@ -17,6 +17,7 @@ from tally_tools import TOOL_NAMES, server
 INBOX = Path("/task/inbox"); INBOX.mkdir(parents=True, exist_ok=True)
 OUT = Path("/workspace/out"); OUT.mkdir(parents=True, exist_ok=True)
 BUILTIN = ["Bash", "Read", "Write", "Edit", "Glob", "Grep"]
+SKILLS = ["reconcile-sources", "data-quality-check", "html-dashboard", "pdf-report"]
 
 
 def emit(kind, **data):
@@ -34,6 +35,7 @@ How to work:
 - Start by calling whoami and list_tables. Check search_knowledge for definitions, playbooks and rules before you choose a method, and cite the passages you rely on.
 - Query with run_sql for aggregates and small results. Use export_query to pull larger results into /workspace/data, then analyse with Python (pandas, DuckDB) via Bash.
 - You can only see this persona's rows. If the question needs data outside that scope, say so plainly rather than guessing.
+- Use your skills (reconcile-sources, data-quality-check, html-dashboard, pdf-report) whenever the task matches them; their scripts are tested, so prefer them over writing your own.
 - Put every deliverable the person should receive (CSV, HTML dashboard, PDF, Markdown) in /workspace/out. Keep scratch files in /workspace/data.
 - Be precise with numbers: state units, periods and filters. Prefer exact SQL totals over estimates.
 - The person may send you notes while you work. They arrive marked "Message from the person you are working for". Treat them as instructions from that person and adjust.
@@ -61,6 +63,8 @@ def note_hook_factory():
 
 async def main():
     prompt = Path("/task/prompt.txt").read_text()
+    # Tally's skills ship read-only in the image; each task gets its own copy where the SDK discovers project skills.
+    shutil.copytree("/opt/tally/skills", "/workspace/.claude/skills", dirs_exist_ok=True)
     env = os.environ
     options = ClaudeAgentOptions(
         model=env["TALLY_MODEL"],
@@ -68,12 +72,13 @@ async def main():
             ws=env["TALLY_WORKSPACE"], ws_name=env.get("TALLY_WORKSPACE_NAME", ""), persona=env.get("TALLY_PERSONA_TITLE", ""),
             scope=env.get("TALLY_SCOPE_DESC", ""))},
         cwd="/workspace",
-        tools=BUILTIN,                                   # no web tools: the sandbox has no internet anyway
-        allowed_tools=BUILTIN + TOOL_NAMES,
+        tools=BUILTIN + ["Skill"],                       # no web tools: the sandbox has no internet anyway
+        allowed_tools=BUILTIN + ["Skill"] + TOOL_NAMES,
+        skills=SKILLS,                                   # only Tally's own skills, never bundled ones
         disallowed_tools=["WebFetch", "WebSearch"],
         permission_mode="dontAsk",                       # anything not pre-approved is denied, never prompted
         mcp_servers={"tally": server},
-        setting_sources=[],                              # ignore any settings files; the platform decides everything
+        setting_sources=["project"],                     # needed to discover /workspace/.claude/skills; nothing else lives there
         max_turns=int(env.get("TALLY_MAX_TURNS", "40")),
         max_budget_usd=float(env.get("TALLY_BUDGET_USD", "0.5")),
         hooks={"PostToolUse": [HookMatcher(hooks=[note_hook_factory()])]},
@@ -98,7 +103,9 @@ async def main():
                         content = b.content if isinstance(b.content, str) else "\n".join(
                             c.get("text", "") for c in (b.content or []) if isinstance(c, dict))
                         emit("tool_result", id=b.tool_use_id, is_error=bool(getattr(b, "is_error", False)), text=content[:4000])
-            elif isinstance(msg, SystemMessage) and msg.subtype not in ("init", "thinking_tokens"):
+            elif isinstance(msg, SystemMessage) and msg.subtype == "init":
+                emit("system", subtype="init", skills=[k for k in (msg.data.get("skills") or []) if k in SKILLS])
+            elif isinstance(msg, SystemMessage) and msg.subtype != "thinking_tokens":
                 emit("system", subtype=msg.subtype)
             elif isinstance(msg, ResultMessage):
                 for f in sorted(OUT.rglob("*")):

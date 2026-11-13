@@ -8,3 +8,4 @@ weasyprint==63.*
 fastembed==0.4.*
 matplotlib==3.*
 openpyxl==3.*
+markdown==3.*

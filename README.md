@@ -4,7 +4,7 @@
 
 Tally is a self-hosted platform for agentic data work: reconciliations, investigations, data-quality checks and reports, delivered as CSV files, PDF reports or interactive HTML dashboards. It is a personal, open-source project built on public data.
 
-> Status: Phases 1 and 2 are complete: data, roles and knowledge base, plus sandboxed agent runs with a model proxy, steering, stop and a streaming API. Next: skills and polished outputs. See [the architecture](docs/ARCHITECTURE.md).
+> Status: Phases 1 to 3 are complete: data, roles and knowledge base; sandboxed agent runs with a model proxy, steering, stop and a streaming API; and skills that produce reconciliations, data-quality reports, interactive dashboards and PDF reports. Next: the web app. See [the architecture](docs/ARCHITECTURE.md).
 
 ## What makes it different
 
@@ -12,6 +12,8 @@ Tally is a self-hosted platform for agentic data work: reconciliations, investig
 - **Isolated execution.** Each task runs in its own throwaway gVisor sandbox: no internet, no route to the host, read-only system disk, no Linux capabilities, unprivileged user. The model API key never enters the sandbox; a proxy adds it and enforces per-task and daily budgets. Attack tests prove each of these.
 - **Steerable while running.** Add instructions mid-task, stop and redirect, or approve sensitive steps.
 - **Grounded in business knowledge, with citations.** Each workspace has a knowledge base built from official PDFs, web pages, wiki articles, playbooks and uploaded documents. Every passage carries a citation (down to the PDF page) and an authority level, so answers can show their sources.
+
+- **Skills with tested scripts.** The agent loads procedures on demand (reconcile two sources, data-quality check, HTML dashboard, PDF report). Each skill ships a script with its own tests, so results are consistent and the agent spends its effort on analysis, not on re-writing plumbing. Dashboards and reports use a colour-blind-safe palette and work offline.
 
 ## Workspaces
 
