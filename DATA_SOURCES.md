@@ -17,3 +17,19 @@ Tally uses only public data. Raw files are not stored in this repository; the lo
 Tally is a personal, non-commercial project. Knowledge-base playbooks in `kb/docs/` are original writing.
 
 Local embedding model: [BAAI/bge-small-en-v1.5](https://huggingface.co/BAAI/bge-small-en-v1.5) (MIT), run with [fastembed](https://github.com/qdrant/fastembed).
+
+## Knowledge base documents
+
+Registered in [`kb/sources.yaml`](kb/sources.yaml) and fetched politely (identified user agent, cached). Sites that block automated access are not scraped.
+
+| Workspace | Document | Type | Authority | License / terms |
+|---|---|---|---|---|
+| Federal Spending | [USAspending Federal Spending Guide](https://www.usaspending.gov/data/Federal-Spending-Guide.pdf) | PDF | Official | US Government work, public domain |
+| Federal Spending | [About the USAspending Data Download](https://www.usaspending.gov/data/about-the-data-download.pdf) | PDF | Official | US Government work, public domain |
+| Federal Spending | Wikipedia: Digital Accountability and Transparency Act of 2014 | Wiki | Reference | CC BY-SA 4.0 |
+| Online Retail | Wikipedia: Boleto, Pix, Brazilian real, Regions of Brazil | Wiki | Reference | CC BY-SA 4.0 |
+| City Operations | [NYC HPD: Heat and Hot Water Information](https://www.nyc.gov/site/hpd/services-and-information/heat-and-hot-water-information.page) | Web page | Official | NYC.gov terms of use |
+| City Operations | [Mayor's Management Report, Fiscal 2025](https://www.nyc.gov/assets/operations/downloads/pdf/mmr2025/2025_mmr.pdf) | PDF | Official | NYC.gov terms of use |
+| City Operations | Wikipedia: 311 (telephone number), NYC311 | Wiki | Reference | CC BY-SA 4.0 |
+
+Wikipedia text is used for retrieval with attribution through its citation. Workspace members can add their own documents (PDF, Word, Markdown, HTML) through `kb/uploads/<workspace>/`; uploads are never committed.

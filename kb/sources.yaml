@@ -1,0 +1,64 @@
+# Knowledge base source registry.
+# authority: official (government or publisher of the data), internal (Tally playbooks), reference (encyclopedic), uploaded (user-provided).
+# The agent is told the authority of every passage it reads and should prefer official and internal sources when they disagree.
+
+ws_federal:
+  - title: "USAspending Federal Spending Guide"
+    type: pdf
+    url: https://www.usaspending.gov/data/Federal-Spending-Guide.pdf
+    publisher: U.S. Department of the Treasury (USAspending.gov)
+    authority: official
+  - title: "About the USAspending Data Download"
+    type: pdf
+    url: https://www.usaspending.gov/data/about-the-data-download.pdf
+    publisher: U.S. Department of the Treasury (USAspending.gov)
+    authority: official
+  - title: "Digital Accountability and Transparency Act of 2014"
+    type: wiki
+    page: Digital_Accountability_and_Transparency_Act_of_2014
+    publisher: Wikipedia
+    authority: reference
+
+ws_retail:
+  - title: "Boleto"
+    type: wiki
+    page: Boleto
+    publisher: Wikipedia
+    authority: reference
+  - title: "Pix (payment system)"
+    type: wiki
+    page: Pix_(payment_system)
+    publisher: Wikipedia
+    authority: reference
+  - title: "Brazilian real"
+    type: wiki
+    page: Brazilian_real
+    publisher: Wikipedia
+    authority: reference
+  - title: "Regions of Brazil"
+    type: wiki
+    page: Regions_of_Brazil
+    publisher: Wikipedia
+    authority: reference
+
+ws_city:
+  - title: "Heat and Hot Water Information"
+    type: html
+    url: https://www.nyc.gov/site/hpd/services-and-information/heat-and-hot-water-information.page
+    publisher: NYC Department of Housing Preservation and Development
+    authority: official
+  - title: "Mayor's Management Report, Fiscal 2025"
+    type: pdf
+    url: https://www.nyc.gov/assets/operations/downloads/pdf/mmr2025/2025_mmr.pdf
+    publisher: NYC Mayor's Office of Operations
+    authority: official
+  - title: "311 (telephone number)"
+    type: wiki
+    page: 311_(telephone_number)
+    publisher: Wikipedia
+    authority: reference
+  - title: "NYC311"
+    type: wiki
+    page: NYC311
+    publisher: Wikipedia
+    authority: reference

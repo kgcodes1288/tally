@@ -4,14 +4,14 @@
 
 Tally is a self-hosted platform for agentic data work: reconciliations, investigations, data-quality checks and reports, delivered as CSV files, PDF reports or interactive HTML dashboards. It is a personal, open-source project built on public data.
 
-> Status: Phase 1 of 6 (data, roles and knowledge base) is complete. See [the architecture](docs/ARCHITECTURE.md).
+> Status: Phase 1 of 6 (data, roles and knowledge base) is complete, including a document pipeline for PDFs, web pages, wikis and uploads. See [the architecture](docs/ARCHITECTURE.md).
 
 ## What makes it different
 
 - **Security enforced by the database, not by a prompt.** Every task gets a short-lived database login scoped to one role. Row-level security means an agent acting for the NASA budget analyst cannot read Education's data, even with a hand-written query. This is covered by tests.
 - **Isolated execution.** Each task runs in its own throwaway sandbox with no internet access and no secrets inside it.
 - **Steerable while running.** Add instructions mid-task, stop and redirect, or approve sensitive steps.
-- **Grounded in business knowledge.** A per-workspace knowledge base (data dictionaries plus reconciliation and data-quality playbooks) with hybrid search, embedded locally.
+- **Grounded in business knowledge, with citations.** Each workspace has a knowledge base built from official PDFs, web pages, wiki articles, playbooks and uploaded documents. Every passage carries a citation (down to the PDF page) and an authority level, so answers can show their sources.
 
 ## Workspaces
 

@@ -24,7 +24,7 @@ It is a personal, open-source, non-commercial project built entirely on public d
 | Model proxy | Small Python service | Adds the API key on the way out, enforces per-task and daily budgets, records token usage and cost |
 | Data tool | MCP server (read-only SQL) | Connects with a short-lived, role-scoped database login; statement timeouts and row limits |
 | Database | PostgreSQL 17 with pgvector | Workspace data with row-level security, platform metadata, knowledge base, event log |
-| Knowledge base | pgvector, Postgres full-text search, fastembed (local embeddings) | Hybrid search over data dictionaries, business rules and playbooks |
+| Knowledge base | pgvector, Postgres full-text search, fastembed (local embeddings), pypdf, trafilatura, python-docx | PDFs, web pages, wiki articles, playbooks and uploads, split by page or heading, every passage with a citation and an authority level; hybrid search with source diversity |
 | Skills | Agent Skills folders | Reusable procedures: reconcile sources, data-quality checks, HTML dashboard, PDF report |
 | Analytics in the sandbox | DuckDB, pandas, Plotly, WeasyPrint | Heavy computation and output generation |
 
