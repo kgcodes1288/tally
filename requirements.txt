@@ -1,0 +1,7 @@
+duckdb>=1.1
+pandas>=2.2
+pyarrow>=17
+psycopg[binary]>=3.2
+fastembed>=0.4
+kaggle>=1.7
+pytest>=8

@@ -1,0 +1,22 @@
+name: tally
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: tally-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tally_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: tally
+    ports:
+      - "127.0.0.1:5433:5432"   # host-only; never exposed publicly
+    volumes:
+      - tally-pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    command: ["postgres", "-c", "shared_buffers=2GB", "-c", "work_mem=64MB", "-c", "maintenance_work_mem=1GB", "-c", "max_wal_size=8GB"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tally_admin -d tally"]
+      interval: 5s
+      retries: 20
+volumes:
+  tally-pgdata:
