@@ -48,6 +48,20 @@ def create_task(workspace: str, persona: str, prompt: str, model: str = "claude-
     return str(tid)
 
 
+def sandbox_args(run: Path, env: dict) -> list[str]:
+    """Isolation settings for every task sandbox (also used by the security tests, so they test exactly this)."""
+    args = ["--runtime=runsc",                                  # gVisor: the agent never talks to the host kernel
+            "--network", "tally-sandbox",                       # internal-only network: database and model proxy, no internet
+            "--memory", "2g", "--cpus", "2", "--pids-limit", "512",
+            "--read-only",                                      # system disk is read-only
+            "--tmpfs", "/tmp:rw,size=512m", "--tmpfs", "/home/agent:rw,size=256m,uid=1000,gid=1000",
+            "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--user", "1000:1000",
+            "-v", f"{run / 'workspace'}:/workspace", "-v", f"{run / 'task'}:/task"]
+    for k, v in env.items():
+        args += ["-e", f"{k}={v}"]
+    return args
+
+
 def _container(task_id: str) -> str:
     return f"tally-task-{task_id[:8]}"
 
@@ -82,15 +96,8 @@ async def run_task(task_id: str, on_event=None):
            "TALLY_DB_DSN": f"postgresql://{login}:{pw}@{DB_SANDBOX_HOST}:5432/tally",
            "ANTHROPIC_BASE_URL": PROXY_URL, "ANTHROPIC_API_KEY": token,
            "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5", "ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5"}
-    cmd = ["docker", "run", "-d", "--name", name, "--runtime=runsc", "--network", "tally-sandbox",
-           "--memory", "2g", "--cpus", "2", "--pids-limit", "512", "--read-only",
-           "--tmpfs", "/tmp:rw,size=512m", "--tmpfs", "/home/agent:rw,size=256m,uid=1000,gid=1000",
-           "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--user", "1000:1000",
-           "-v", f"{run / 'workspace'}:/workspace", "-v", f"{run / 'task'}:/task",
-           "--label", f"tally.task={task_id}"]
-    for k, v in env.items():
-        cmd += ["-e", f"{k}={v}"]
-    subprocess.run(cmd + [IMAGE], check=True, capture_output=True)
+    await asyncio.to_thread(subprocess.run, ["docker", "run", "-d", "--name", name, "--label", f"tally.task={task_id}"]
+                            + sandbox_args(run, env) + [IMAGE], check=True, capture_output=True)
 
     result, stopped = None, False
     logs = await asyncio.create_subprocess_exec("docker", "logs", "-f", name, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
@@ -118,8 +125,9 @@ async def run_task(task_id: str, on_event=None):
         await asyncio.wait_for(pump(), timeout=TASK_TIMEOUT_S)
     except asyncio.TimeoutError:
         event(db, task_id, "error", {"message": f"Timed out after {TASK_TIMEOUT_S} seconds"})
-        subprocess.run(["docker", "kill", name], capture_output=True)
-    exit_code = int(subprocess.run(["docker", "wait", name], capture_output=True, text=True).stdout.strip() or 1)
+        await asyncio.to_thread(subprocess.run, ["docker", "kill", name], capture_output=True)
+    waited = await asyncio.to_thread(subprocess.run, ["docker", "wait", name], capture_output=True, text=True)
+    exit_code = int(waited.stdout.strip() or 1)
 
     current = db.execute("SELECT status FROM tally.tasks WHERE id=%s", (task_id,)).fetchone()[0]
     stopped = (run / "task/.stop").exists()
@@ -139,7 +147,7 @@ async def run_task(task_id: str, on_event=None):
     db.execute("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = %s", (login,))
     db.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(login)))
     db.execute("UPDATE tally.tasks SET proxy_token_sha256 = NULL WHERE id=%s", (task_id,))
-    subprocess.run(["docker", "rm", "-f", name], capture_output=True)
+    await asyncio.to_thread(subprocess.run, ["docker", "rm", "-f", name], capture_output=True)
     shutil.rmtree(run / "task/inbox", ignore_errors=True)
     db.close()
     return status

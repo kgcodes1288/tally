@@ -89,3 +89,24 @@ def test_reference_tables_respect_scope_or_are_shared():
         assert c.execute("SELECT count(*) FROM ws_city.weather_daily").fetchone()[0] == 90
     finally:
         c.close(); admin.execute(f"DROP ROLE {name}")
+
+
+@pytest.mark.parametrize("attack", [
+    "SELECT prompt FROM tally.tasks",
+    "SELECT * FROM tally.task_events",
+    "SELECT * FROM tally.task_messages",
+    "SELECT * FROM tally.model_usage",
+    "SELECT * FROM tally.personas",
+    "UPDATE tally.tasks SET budget_usd = 100",
+    "SELECT rolpassword FROM pg_authid",
+    "CREATE ROLE evil LOGIN",
+    "COPY ws_retail.orders TO '/tmp/x.csv'",
+    "SELECT pg_read_file('/etc/passwd')",
+])
+def test_task_login_cannot_touch_platform_tables(attack):
+    admin, name, c = temp_login("p_ret_finance")
+    try:
+        with pytest.raises(psycopg.Error):
+            c.execute(attack)
+    finally:
+        c.close(); admin.execute(f"DROP ROLE {name}")

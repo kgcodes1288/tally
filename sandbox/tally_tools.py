@@ -14,6 +14,7 @@ from claude_agent_sdk import ToolAnnotations, create_sdk_mcp_server, tool
 DSN = os.environ["TALLY_DB_DSN"]
 WORKSPACE = os.environ["TALLY_WORKSPACE"]          # also the schema name, e.g. ws_federal
 DATA_DIR = Path("/workspace/data"); DATA_DIR.mkdir(parents=True, exist_ok=True)
+OUT_DIR = Path("/workspace/out"); OUT_DIR.mkdir(parents=True, exist_ok=True)
 MAX_ROWS_SHOWN = 200
 EXPORT_ROW_LIMIT = 2_000_000
 READ_ONLY = ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False)
@@ -108,13 +109,15 @@ async def run_sql(args):
         return _text(f"SQL error: {msg}.{hint}", error=True)
 
 
-@tool("export_query", "Run a read-only SQL query and save the full result as a CSV file under /workspace/data, for analysis with "
-      "pandas or DuckDB via Bash, or for delivery. Returns the file path, row count and columns.",
+@tool("export_query", "Run a read-only SQL query and save the full result as a CSV file. A plain filename goes to /workspace/data for analysis "
+      "with pandas or DuckDB via Bash; a filename starting with /workspace/out/ is saved as a deliverable. Returns the file path, row count and columns.",
       {"sql": str, "filename": str}, annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
 async def export_query(args):
-    fname = re.sub(r"[^A-Za-z0-9_.-]", "_", args["filename"]) or "export.csv"
+    raw = args["filename"].strip()
+    folder = OUT_DIR if raw.startswith(("/workspace/out/", "out/")) else DATA_DIR   # deliverable or scratch
+    fname = re.sub(r"[^A-Za-z0-9_.-]", "_", raw.rsplit("/", 1)[-1]) or "export.csv"
     if not fname.endswith(".csv"): fname += ".csv"
-    path = DATA_DIR / fname
+    path = folder / fname
     try:
         with _conn() as c, open(path, "w", newline="") as f:
             cur = c.execute(args["sql"].strip().rstrip(";"))

@@ -98,7 +98,7 @@ async def main():
                         content = b.content if isinstance(b.content, str) else "\n".join(
                             c.get("text", "") for c in (b.content or []) if isinstance(c, dict))
                         emit("tool_result", id=b.tool_use_id, is_error=bool(getattr(b, "is_error", False)), text=content[:4000])
-            elif isinstance(msg, SystemMessage) and msg.subtype not in ("init",):
+            elif isinstance(msg, SystemMessage) and msg.subtype not in ("init", "thinking_tokens"):
                 emit("system", subtype=msg.subtype)
             elif isinstance(msg, ResultMessage):
                 for f in sorted(OUT.rglob("*")):
