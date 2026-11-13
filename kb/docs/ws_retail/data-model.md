@@ -21,3 +21,8 @@ Olist is a Brazilian marketplace that connects small sellers to large online sto
 - Payments in installments (`payment_installments` above 1) can include interest, so amount paid may exceed order value.
 - A few orders have payments but no items, or items but no payment.
 - Product dimension and description-length columns have spelling errors in their names (`lenght`), kept as published.
+
+## Reference tables
+- `fx_brl_usd`: Central Bank of Brazil daily rate, BRL per 1 USD, business days only. Convert with the rate on the purchase date, or the latest earlier rate for weekends and holidays.
+- `holidays`: Brazilian national holidays, 2016 to 2018, for seasonality questions (Carnaval, Christmas).
+- `states`: two-letter state codes, names and official regions (North, Northeast, Center-West, Southeast, South). Join on `customer_state` or `seller_state`.

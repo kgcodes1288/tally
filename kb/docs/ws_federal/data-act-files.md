@@ -21,3 +21,7 @@ Account-level spending tied to individual awards: contracts, grants, loans and o
 - `award_unique_key` identifies an award across rows; one award can have many File C rows.
 - `transaction_obligated_amount` is the File C obligation amount. Negative values are deobligations.
 - Amounts are in US dollars.
+
+## Reference tables for trends
+- `agency_budget_history`: agency-wide budgetary resources, obligations and outlays per fiscal year, about ten years per agency. The newest year can be partial.
+- `agency_obligation_pace`: cumulative obligations by fiscal year and period (period 1 is October). Compare years at the same period to judge spending pace, for example "by period 6 NASA had obligated X percent of its year-end total".

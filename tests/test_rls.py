@@ -76,3 +76,16 @@ def test_unspecified_borough_only_citywide():
             assert c.execute("SELECT count(*) FROM ws_city.service_requests WHERE borough='UNSPECIFIED'").fetchone()[0] == n_expected
         finally:
             c.close(); admin.execute(f"DROP ROLE {name}")
+
+
+def test_reference_tables_respect_scope_or_are_shared():
+    admin, name, c = temp_login("p_fed_epa")
+    try:
+        assert {v for (v,) in c.execute("SELECT DISTINCT agency_code FROM ws_federal.agency_budget_history")} == {"068"}
+    finally:
+        c.close(); admin.execute(f"DROP ROLE {name}")
+    admin, name, c = temp_login("p_city_bronx")
+    try:
+        assert c.execute("SELECT count(*) FROM ws_city.weather_daily").fetchone()[0] == 90
+    finally:
+        c.close(); admin.execute(f"DROP ROLE {name}")

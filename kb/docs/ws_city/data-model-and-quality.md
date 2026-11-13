@@ -21,3 +21,7 @@
 ## Reporting conventions
 - Always state the date range and which boroughs the requester can see.
 - Show response times as median and 90th percentile, by complaint type and agency.
+
+## Reference tables
+- `weather_daily`: Central Park daily minimum, maximum and mean temperature (Fahrenheit), precipitation and snowfall (inches), Q1 2025. Join on `created_date::date`. Heat and hot water complaints rise sharply on cold days.
+- `community_districts`: population per community district. The latest census in the source is 2010, so call per-capita rates approximate.
