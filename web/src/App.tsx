@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Gauge } from 'lucide-react'
+import { Gauge, Menu, X } from 'lucide-react'
 import type { Me, TaskSummary, Workspace } from './lib/api'
 import { api, money, usePolling } from './lib/api'
 import { Sidebar } from './components/Sidebar'
@@ -14,12 +14,13 @@ export default function App() {
   const [personaId, setPersonaId] = useState(localStorage.getItem('tally.persona') ?? '')
   const [taskId, setTaskId] = useState<string | null>(route())
   const [tick, setTick] = useState(0)
+  const [menu, setMenu] = useState(false)   // sidebar drawer on small screens
   const tasks = usePolling<TaskSummary[]>(api.tasks, 4000, [tick]) ?? []
   const usage = usePolling(api.usage, 10000, [tick])
 
   const [me, setMe] = useState<Me | null>(null)
   useEffect(() => { api.workspaces().then(setWorkspaces); api.me().then(setMe) }, [])
-  useEffect(() => { const on = () => setTaskId(route()); window.addEventListener('hashchange', on); return () => window.removeEventListener('hashchange', on) }, [])
+  useEffect(() => { const on = () => { setTaskId(route()); setMenu(false) }; window.addEventListener('hashchange', on); return () => window.removeEventListener('hashchange', on) }, [])
 
   const ws = workspaces.find(w => w.id === wsId) ?? workspaces[0]
   const persona = ws?.personas.find(p => p.id === personaId) ?? ws?.personas[0]
@@ -34,13 +35,22 @@ export default function App() {
   if (!ws || !persona) return <div className="grid h-full place-items-center text-ink-3">Loading Tally…</div>
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full flex-col lg:flex-row">
+      <div className="flex items-center gap-2.5 border-b border-line bg-surface px-4 py-2.5 lg:hidden">
+        <button onClick={() => setMenu(true)} aria-label="Open menu" className="rounded-lg p-1.5 hover:bg-black/5"><Menu className="size-5" /></button>
+        <img src="/tally.svg" alt="" className="size-6" /><span className="font-bold">Tally</span>
+        <span className="ml-auto truncate text-[12px] text-ink-3">{persona.title}</span>
+      </div>
+      {menu && <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={() => setMenu(false)} />}
+      <div className={`fixed inset-y-0 left-0 z-50 transition-transform lg:static lg:z-auto lg:translate-x-0 ${menu ? 'translate-x-0' : '-translate-x-full'}`}>
+        {menu && <button onClick={() => setMenu(false)} aria-label="Close menu" className="absolute top-4 right-3 z-10 rounded-lg p-1.5 hover:bg-black/5 lg:hidden"><X className="size-5" /></button>}
       <Sidebar workspaces={workspaces} wsId={ws.id} personaId={persona.id} tasks={tasks} activeTask={taskId}
-        onWorkspace={id => { setWsId(id); setPersonaId(''); open(null) }} onPersona={id => { setPersonaId(id); open(null) }}
-        onNew={() => open(null)} onOpenTask={open} />
+        onWorkspace={id => { setWsId(id); setPersonaId(''); open(null) }} onPersona={id => { setPersonaId(id); open(null); setMenu(false) }}
+        onNew={() => { open(null); setMenu(false) }} onOpenTask={open} />
+      </div>
       <main className="relative min-w-0 flex-1 overflow-y-auto">
         {usage && !taskId && (
-          <div className="absolute top-4 right-5 flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-[12px] text-ink-2" title="Model spend today against the daily cap">
+          <div className="absolute top-4 right-5 hidden items-center gap-1.5 rounded-full lg:flex border border-line bg-surface px-3 py-1.5 text-[12px] text-ink-2" title="Model spend today against the daily cap">
             <Gauge className="size-3.5 text-accent" />Today {money(usage.today_usd)} of {money(usage.daily_cap_usd)}
           </div>
         )}

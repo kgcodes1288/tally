@@ -60,9 +60,9 @@ export function TaskView({ taskId, onChanged }: { taskId: string; onChanged: () 
   const model = MODELS.find(m => m.id === task.model)?.label ?? task.model
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <header className="border-b border-line bg-surface px-7 py-4">
-        <div className="flex items-start gap-4">
+    <div className="flex min-h-full flex-col lg:h-full lg:min-h-0">
+      <header className="border-b border-line bg-surface px-4 py-3 lg:px-7 lg:py-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
               <StatusPill status={task.status} />
@@ -77,15 +77,15 @@ export function TaskView({ taskId, onChanged }: { taskId: string; onChanged: () 
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="flex min-h-0 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto px-7 py-5">
+      <div className="grid flex-1 grid-cols-1 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_360px] lg:overflow-hidden">
+        <div className="flex flex-col lg:min-h-0">
+          <div className="px-4 py-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-7 lg:py-5">
             <Timeline steps={steps} live={live} />
             {task.status === 'budget_exceeded' && <div className="mt-3"><ErrorNote>The task used its whole budget and was stopped. Results so far are kept.</ErrorNote></div>}
             <div ref={bottom} />
           </div>
           {live && (
-            <div className="border-t border-line bg-surface px-7 py-3">
+            <div className="sticky bottom-0 border-t border-line bg-surface px-4 py-3 lg:static lg:px-7">
               <div className="flex items-end gap-2">
                 <textarea value={note} onChange={e => setNote(e.target.value)} rows={1}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
@@ -100,7 +100,7 @@ export function TaskView({ taskId, onChanged }: { taskId: string; onChanged: () 
           )}
         </div>
 
-        <aside className="min-h-0 space-y-4 overflow-y-auto border-l border-line bg-canvas/60 px-5 py-5">
+        <aside className="space-y-4 border-t lg:min-h-0 lg:overflow-y-auto border-line bg-canvas/60 px-4 py-5 lg:border-t-0 lg:border-l lg:px-5">
           {task.files_expired && <Card className="p-4 text-[13px] text-ink-3">Output files are kept for 30 days and have been removed. The activity timeline is kept.</Card>}
           {task.files.length > 0 && (
             <div>

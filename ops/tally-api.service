@@ -7,7 +7,7 @@ Requires=docker.service
 User=karthick1288
 WorkingDirectory=/home/karthick1288/tally/api
 # Audience tag of the Cloudflare Access application for tally.karthickg.dev (not a secret)
-Environment=TALLY_CF_AUD=
+Environment=TALLY_CF_AUD=63cb9e6a0dcab6de342039d262dc8ba4e891a8a67ce1a358e6f2e7ccc62e8ab7
 Environment=TALLY_OWNERS=karthickmit25@gmail.com
 ExecStart=/home/karthick1288/tally/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8300 --no-access-log
 Restart=on-failure
