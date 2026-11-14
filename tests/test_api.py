@@ -82,10 +82,13 @@ def test_public_replays_expose_only_showcase_tasks(client):
 
 
 def test_public_replay_payload_has_no_secrets(client):
-    t = tally.rows("SELECT id::text FROM tally.tasks WHERE status='succeeded' ORDER BY created_at DESC LIMIT 1")[0]["id"]
+    # a task that is not already published, so cleanup never unpublishes a real replay
+    t = tally.rows("SELECT id::text FROM tally.tasks WHERE status='succeeded' AND showcase_title IS NULL ORDER BY created_at DESC LIMIT 1")[0]["id"]
     tally.rows("UPDATE tally.tasks SET showcase_title='test' WHERE id::text=%s RETURNING id", t)
     try:
-        body = client.get(f"/api/public/replays/{t}").text
+        r = client.get(f"/api/public/replays/{t}")
+        assert isinstance(r.json()["seconds"], int)
+        body = r.text
         for secret in ("created_by", "db_login", "proxy_token", "postgresql://", "sk-ant", "TALLY_DB_DSN"):
             assert secret not in body
     finally:

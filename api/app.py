@@ -70,7 +70,7 @@ async def sweep_once():
             db.execute("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = %s", (r,))
             db.execute(o.sql.SQL("DROP ROLE IF EXISTS {}").format(o.sql.Identifier(r)))
     expired = 0
-    for t in rows("SELECT id::text FROM tally.tasks WHERE finished_at < now() - make_interval(days => %s)", RETENTION_DAYS):
+    for t in rows("SELECT id::text FROM tally.tasks WHERE finished_at < now() - make_interval(days => %s) AND showcase_title IS NULL", RETENTION_DAYS):
         d = o.RUNS / t["id"]
         if d.exists():
             await asyncio.to_thread(o.shutil.rmtree, d, True); expired += 1
@@ -267,7 +267,8 @@ def _serve_file(task_id: str, path: str):
 
 def _showcase(task_id: str):
     r = rows("""SELECT t.id::text, t.showcase_title AS title, t.showcase_blurb AS blurb, t.workspace_id, w.name AS workspace_name,
-                       p.title AS persona_title, t.model, t.prompt, t.status, t.spent_usd, t.result, t.started_at, t.finished_at
+                       p.title AS persona_title, t.model, t.prompt, t.status, t.spent_usd, t.result, t.started_at, t.finished_at,
+                       extract(epoch FROM t.finished_at - t.started_at)::int AS seconds
                 FROM tally.tasks t JOIN tally.workspaces w ON w.id = t.workspace_id JOIN tally.personas p ON p.pg_role = t.persona
                 WHERE t.id::text = %s AND t.showcase_title IS NOT NULL AND t.status IN ('succeeded', 'stopped')""", task_id)
     if not r:
