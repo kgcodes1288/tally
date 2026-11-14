@@ -2,17 +2,19 @@
 
 **Ask a question about your data in plain English. An AI agent does the work in an isolated sandbox, using only the data your role is allowed to see, and you can watch and steer it while it works.**
 
-Tally is a self-hosted platform for agentic data work: reconciliations, investigations, data-quality checks and reports, delivered as CSV files, PDF reports or interactive HTML dashboards. It is a personal, open-source project built on public data.
+Tally is a self-hosted platform for agentic data work: reconciliations, investigations, data-quality checks and reports, delivered as CSV files, PDF reports or interactive HTML dashboards. It is a personal, non-commercial project built on public data.
 
-> Status: Phases 1 to 4 are complete: data, roles and knowledge base; sandboxed agent runs with a model proxy, steering and stop; skills for reconciliations, data-quality reports, dashboards and PDF reports; and a web app with a live activity timeline. Next: hardening and the public demo. See [the architecture](docs/ARCHITECTURE.md).
+**Watch real runs:** [tally.karthickg.dev/demo](https://tally.karthickg.dev/demo) (recorded replays, no login) · **Case study:** [karthickg.dev/tally](https://karthickg.dev/tally/) · **Evals:** [12 of 12 passed](evals/RESULTS.md)
+
+> Status: Phases 1 to 6 are complete: data, roles and knowledge base; sandboxed agent runs with a model proxy, steering and stop; skills for reconciliations, data-quality reports, dashboards and PDF reports; a web app with a live activity timeline; sign-in, per-user limits and housekeeping; and evals, prompt-injection tests and a public replay gallery. See [the architecture](docs/ARCHITECTURE.md).
 
 ## What makes it different
 
 - **Security enforced by the database, not by a prompt.** Every task gets a short-lived database login scoped to one role. Row-level security means an agent acting for the NASA budget analyst cannot read Education's data, even with a hand-written query. This is covered by tests.
 - **Isolated execution.** Each task runs in its own throwaway gVisor sandbox: no internet, no route to the host, read-only system disk, no Linux capabilities, unprivileged user. The model API key never enters the sandbox; a proxy adds it and enforces per-task and daily budgets. Attack tests prove each of these.
-- **Steerable while running.** Add instructions mid-task, stop and redirect, or approve sensitive steps.
+- **Steerable while running.** Add instructions mid-task and the agent reads them at its next step, or stop it and keep the partial results.
+- **Measured.** An eval set runs every case as a real task and grades it against truth computed from the database: accuracy, out-of-scope refusals and planted prompt-injection attacks. See [the latest results](evals/RESULTS.md).
 - **Grounded in business knowledge, with citations.** Each workspace has a knowledge base built from official PDFs, web pages, wiki articles, playbooks and uploaded documents. Every passage carries a citation (down to the PDF page) and an authority level, so answers can show their sources.
-
 - **Skills with tested scripts.** The agent loads procedures on demand (reconcile two sources, data-quality check, HTML dashboard, PDF report). Each skill ships a script with its own tests, so results are consistent and the agent spends its effort on analysis, not on re-writing plumbing. Dashboards and reports use a colour-blind-safe palette and work offline.
 
 ## Workspaces
